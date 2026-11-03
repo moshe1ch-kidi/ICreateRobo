@@ -1354,7 +1354,7 @@ const SICON = {
   far: '<rect x="1" y="6" width="6" height="8" rx="1.5" fill="#374151"/><circle cx="5" cy="10" r="1.6" fill="#EF4444"/><path d="M8 10h10M14 6.5 18 10l-4 3.5" stroke="#EF4444" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   joy: '<rect x="2" y="12" width="16" height="6" rx="3" fill="#374151"/><path d="M10 13 12.5 5" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round"/><circle cx="12.8" cy="4.5" r="3" fill="#EF4444"/>',
 };
-const sIcon = k => ({type:'field_image', src:'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 20 20">${SICON[k]}</svg>`), width:24, height:24, alt:''});
+const sIcon = k => ({type:'field_image', src:'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 20 20">${SICON[k]}</svg>`), width:32, height:32, alt:''});
 /* one block per sensor of the kit */
 const SENSOR_BLOCKS = [
   ['gray', '%1 grayscale sensor %2', APINS, 'Number', 'How dark the surface under it is, 80 to 1023. Good for following a black line'],
@@ -1688,6 +1688,28 @@ Object.assign(EXAMPLES, {
 });
 /* robot examples first (after Hello world) */
 Object.keys(EXAMPLES).forEach(k => { if (k !== 'Hello world' && !/type="rb_/.test(EXAMPLES[k])) { const x = EXAMPLES[k]; delete EXAMPLES[k]; EXAMPLES[k] = x; } });
+/* small pictures on the micro:bit's own sensor blocks too (Robot Workshop only) */
+const MBICON = {
+  mb_watch: '<rect x="1.5" y="3" width="17" height="14" rx="2.5" fill="#fff" stroke="#3A8DB2" stroke-width="1.5"/><rect x="1.5" y="3" width="17" height="4" rx="2" fill="#3A8DB2"/><path d="M4 14l3-3 3 2 5-5" stroke="#16A34A" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  mb_button: '<rect x="1" y="4" width="18" height="12" rx="3" fill="#374151"/><circle cx="6.5" cy="10" r="3" fill="#E5E7EB"/><circle cx="13.5" cy="10" r="3" fill="#E5E7EB"/><path d="M5.3 11.4 6.5 8.2l1.2 3.2M5.8 10.4h1.4" stroke="#111" stroke-width=".9" fill="none"/><path d="M12.6 8.3h1.3a.9.9 0 0 1 0 1.7h-1.3zm0 1.7h1.5a.9.9 0 0 1 0 1.7h-1.5z" stroke="#111" stroke-width=".8" fill="none"/>',
+  mb_logo: '<ellipse cx="10" cy="10" rx="8.5" ry="5.5" fill="none" stroke="#D4A017" stroke-width="2"/><circle cx="6.5" cy="10" r="1.6" fill="#D4A017"/><circle cx="13.5" cy="10" r="1.6" fill="#D4A017"/>',
+  mb_gesture: '<rect x="5" y="3" width="10" height="14" rx="2" fill="#374151" transform="rotate(-15 10 10)"/><path d="M1.5 7c-1 2-1 4 0 6M18.5 7c1 2 1 4 0 6" stroke="#5CB1D6" stroke-width="1.6" fill="none" stroke-linecap="round"/>',
+  mb_accel: '<path d="M10 10V2.5M10 10h7.5M10 10l-5.5 5.5" stroke="#374151" stroke-width="1.8" stroke-linecap="round"/><path d="M8 4.5 10 2l2 2.5M15.5 8l2.5 2-2.5 2M3.5 13v3.5H7" stroke="#374151" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="1.8" fill="#EF4444"/>',
+  mb_light: SICON.light,
+  mb_temp: '<rect x="7.5" y="1.5" width="5" height="12" rx="2.5" fill="#fff" stroke="#374151" stroke-width="1.3"/><circle cx="10" cy="15" r="3.6" fill="#EF4444" stroke="#374151" stroke-width="1.3"/><rect x="9" y="6" width="2" height="8" fill="#EF4444"/>',
+  mb_compass: '<circle cx="10" cy="10" r="8.5" fill="#fff" stroke="#374151" stroke-width="1.5"/><path d="M10 2.5 12.5 10h-5z" fill="#EF4444"/><path d="M10 17.5 7.5 10h5z" fill="#6B7280"/>',
+  mb_sound_level: '<rect x="7" y="2" width="6" height="10" rx="3" fill="#374151"/><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V18M7 18h6" stroke="#374151" stroke-width="1.6" fill="none" stroke-linecap="round"/>',
+};
+MBICON.mb_button_was = MBICON.mb_button;
+Object.entries(MBICON).forEach(([type, svg]) => {
+  const def = Blockly.Blocks[type]; if (!def) return;
+  const init = def.init;
+  def.init = function(){
+    init.call(this);
+    const src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 20 20">${svg}</svg>`);
+    this.inputList[0].insertFieldAt(0, new Blockly.FieldImage(src, 32, 32, ''));
+  };
+});
 
 const ws = Blockly.inject('blocklyDiv', {
   toolbox: trToolbox(toolbox), rtl: RTL, renderer: 'zelos', theme, trashcan: false, sounds: false,
