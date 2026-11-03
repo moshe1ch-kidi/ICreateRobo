@@ -1989,6 +1989,18 @@ async function sendChunks(code){
   for (let i = 0; i < bytes.length; i += 64) { await S.writer.write(bytes.slice(i, i + 64)); await sleep(15); }
 }
 const DEVICE = 'micro:bit';
+function waitForRaw(ms){
+  /* the raw-mode answer is "raw REPL; CTRL-B to exit" and then ">"; accept it even with a few letters missing */
+  return new Promise((res, rej) => {
+    const t0 = Date.now();
+    (function poll(){
+      const m = /(?:raw ?REP|REPL;|CTRL-?B? to e)[^>]*>/.exec(S.rx);
+      if (m) { S.rx = S.rx.slice(m.index + m[0].length); res(); }
+      else if (Date.now() - t0 > ms) rej(new Error('timeout raw REPL'));
+      else setTimeout(poll, 15);
+    })();
+  });
+}
 async function enterRaw(){
   /* Stop whatever is running and switch to raw mode. Some boards are slow to answer, so try a few times. */
   S.stream = null; S.passthrough = false;
@@ -1999,7 +2011,7 @@ async function enterRaw(){
     await write('\x02'); await sleep(200 + attempt * 200);
     heard += S.rx; S.rx = '';
     await write('\x01');
-    try { await waitFor('raw REPL; CTRL-B to exit\r\n>', 2000 + attempt * 1000); S.ready = true; return; }
+    try { await waitForRaw(2000 + attempt * 1000); S.ready = true; return; }
     catch(e) { heard += S.rx; S.rx = ''; }
   }
   S.ready = false;
@@ -2174,7 +2186,7 @@ async function connect(){
     if (e.name === 'SecurityError') notice('The browser blocks USB connections in this view. Open the app file directly in Chrome or Edge.');
     return;
   }
-  try { await port.open({baudRate:115200}); }
+  try { await port.open({baudRate:115200, bufferSize:16384}); }
   catch(e) { log('Couldn\'t open the micro:bit. Another tab may be using it, like python.microbit.org or MakeCode. Close that tab and try again.', 'err', String(e)); return; }
   S.port = port; S.writer = port.writable.getWriter(); readLoop();
   $('btnConnect').querySelector('span').textContent = 'Disconnect';
