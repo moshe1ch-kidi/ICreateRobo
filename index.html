@@ -2354,6 +2354,9 @@ $('btnConnect').onclick = connect;
 #monWin .mb{padding:6px 10px;max-height:52vh;overflow:auto}
 #monWin .mr{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line)}
 #monWin .mr:last-child{border-bottom:0}
+#monWin .mr.off .mv{opacity:.3}
+#monWin .ml input{vertical-align:middle;margin:0;accent-color:#9966FF}
+#monWin label.ml{cursor:pointer}
 #monWin .ml{flex:1;min-width:0;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #monWin .mr select{flex:1;min-width:0;font:12px var(--f-ui, system-ui);border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px}
 #monWin .mr select.pin{flex:0 0 auto}
@@ -2391,9 +2394,9 @@ $('btnConnect').onclick = connect;
     mspeed:  {label:'motor speed', pins:MOTORS, code:p => `_rget(${p}, 'speed')`, need:'motor'},
   };
   const tr = s => (typeof T === 'function' ? T(s) : s);
-  let mode = 'robot', every = 500, rows = [{k:'sonar', p:'pin1,pin14'}, {k:'gray', p:'pin0'}];
-  try { const s = JSON.parse(localStorage.getItem('robot-monitor') || 'null'); if (s && s.rows) { rows = s.rows.filter(r => RS[r.k]); mode = s.mode || mode; every = +s.every || every; } } catch(e) {}
-  const keep = () => { try { localStorage.setItem('robot-monitor', JSON.stringify({mode, rows, every})); } catch(e) {} };
+  let mode = 'robot', every = 500, rows = [{k:'sonar', p:'pin1,pin14'}, {k:'gray', p:'pin0'}], mbOn = MB.map(() => true);
+  try { const s = JSON.parse(localStorage.getItem('robot-monitor') || 'null'); if (s && s.rows) { rows = s.rows.filter(r => RS[r.k]); mode = s.mode || mode; every = +s.every || every; if (Array.isArray(s.mbOn) && s.mbOn.length === MB.length) mbOn = s.mbOn.map(Boolean); } } catch(e) {}
+  const keep = () => { try { localStorage.setItem('robot-monitor', JSON.stringify({mode, rows, every, mbOn})); } catch(e) {} };
 
   const win = document.createElement('div');
   win.id = 'monWin'; win.hidden = true;
@@ -2423,11 +2426,15 @@ $('btnConnect').onclick = connect;
     addBtn.hidden = mode !== 'robot';
     body.innerHTML = ''; cells = [];
     if (mode === 'mb') {
-      MB.forEach(([l]) => {
+      /* only the ticked sensors are read: less work for the micro:bit */
+      MB.forEach(([l], i) => {
         const r = document.createElement('div'); r.className = 'mr';
-        r.innerHTML = '<span class="ml"></span><span class="mv">–</span>';
-        r.querySelector('.ml').textContent = tr(l);
-        body.appendChild(r); cells.push(r.querySelector('.mv'));
+        r.innerHTML = '<label class="ml"><input type="checkbox"> <span></span></label><span class="mv">–</span>';
+        r.querySelector('.ml span').textContent = tr(l);
+        const cb = r.querySelector('input'); cb.checked = mbOn[i];
+        cb.onchange = () => { mbOn[i] = cb.checked; changed(); };
+        if (!mbOn[i]) r.classList.add('off'); else cells.push(r.querySelector('.mv'));
+        body.appendChild(r);
       });
       return;
     }
@@ -2463,10 +2470,13 @@ $('btnConnect').onclick = connect;
   function code(){
     const needs = new Set();
     const list = mode === 'mb'
-      ? MB.map(([, c], i) => [c, ONOFF_MB.includes(i) ? 1 : 0])
+      ? MB.map(([, c], i) => [c, ONOFF_MB.includes(i) ? 1 : 0, i === 0]).filter((x, i) => mbOn[i])
       : rows.map(r => { needs.add(RS[r.k].need); return [RS[r.k].code(r.p), ONOFF_RS.includes(r.k) ? 1 : r.k === 'sonar' ? 2 : 0]; });
     const n = list.length;
-    const reads = list.map(([c, k], i) => `  try:\n    _add(${i}, ${c}, ${k})\n  except Exception:\n    _B[${i}] = 1`).join('\n');
+    /* the light level is read through the LED screen, so it is read only every 5th round (the screen doesn't flicker) */
+    const reads = list.map(([c, k, slow], i) => slow
+      ? `  if _n % 5 == 0:\n    try:\n      _add(${i}, ${c}, ${k})\n    except Exception:\n      _B[${i}] = 1`
+      : `  try:\n    _add(${i}, ${c}, ${k})\n  except Exception:\n    _B[${i}] = 1`).join('\n');
     const helpers = [...needs].map(x => RB[x]).join('\n');
     return 'from microbit import *\n' + helpers + '\n' +
 `_K = ${JSON.stringify(list.map(x => x[1]))}
@@ -2495,12 +2505,14 @@ def _send():
   s = ','.join(out)
   print('@M|' + s + '|' + str(sum(map(ord, s)) % 89 + 10))
 _t = running_time() - ${every} + 150  # the first values come quickly
+_n = 0
 while True:
 ${reads || '  pass'}
+  _n += 1
   if running_time() - _t >= ${every}:
     _t = running_time()
     _send()
-  sleep(20)
+  sleep(50)  # 20 rounds a second: enough for steady averages, light work for the micro:bit
 `;
   }
   async function start(){
