@@ -2069,7 +2069,7 @@ async function uploadFile(name, content){
 }
 async function ensureLibrary(){
   const r = await execRaw("import microbit\nprint('MICROBIT_OK', 'V2' if hasattr(microbit, 'pin_logo') else 'V1')");
-  if (!r.out.includes('MICROBIT_OK')) throw new Error(r.err || 'not a micro:bit');
+  if (r.err || !/MICRO|BIT|_OK|OK V/.test(r.out) && !/V[12]/.test(r.out)) { if (r.err || !r.out.trim()) throw new Error(r.err || 'not a micro:bit'); }
   S.v1 = r.out.includes('V1');  /* V1 has too little memory for the colour screen library */
 }
 
