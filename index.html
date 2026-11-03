@@ -1711,6 +1711,20 @@ Object.entries(MBICON).forEach(([type, svg]) => {
   };
 });
 
+/* the "sensor window" block sends a check number too, so lines with lost letters are skipped */
+P.forBlock['mb_watch'] = b => {
+  P.definitions_['%watch'] = `_WV = {}
+def _watch(k, v):
+  k = str(k).replace('|', '/')
+  v = str(round(v, 2)) if isinstance(v, float) else str(v)
+  t = running_time()
+  o = _WV.get(k)
+  if o is None or (o[0] != v and t - o[1] >= 50) or t - o[1] >= 1000:
+    _WV[k] = (v, t)
+    s = k + '|' + v
+    print('@W|' + s + '|' + str(sum(map(ord, s)) % 89 + 10))`;
+  return `_watch(${v(b,'NAME',"''")}, ${v(b,'VALUE','0')})\n`; };
+
 const ws = Blockly.inject('blocklyDiv', {
   toolbox: trToolbox(toolbox), rtl: RTL, renderer: 'zelos', theme, trashcan: false, sounds: false,
   zoom: {controls: false, wheel: true, startScale: 0.8, maxScale: 2, minScale: 0.4},
@@ -1897,6 +1911,7 @@ function outRaw(text){
 /* Output from the micro:bit is handled a line at a time, so window lines can be picked out. */
 let outLine = '';
 function out(text){
+  if (window.outHook) return window.outHook(text);
   for (const ch of text) {
     if (ch !== '\n') { outLine += ch; continue; }
     const m = outLine.match(/^@W\|([^|]*)\|(.*)$/);
@@ -1906,7 +1921,7 @@ function out(text){
   /* ordinary text without a line end yet is shown right away, unless it may be a window line */
   if (outLine && !'@W|'.startsWith(outLine.slice(0, 3))) { outRaw(outLine); outLine = ''; }
 }
-function outFlush(){ if (outLine) { if (!/^@W\|/.test(outLine)) outRaw(outLine); outLine = ''; } }
+function outFlush(){ if (window.outFlushHook) return window.outFlushHook(); if (outLine) { if (!/^@W\|/.test(outLine)) outRaw(outLine); outLine = ''; } }
 /* Only stacks under "when ▶ clicked" run. Loose blocks stay in the workspace as drafts and look faded. */
 function hasStart(){ return ws.getTopBlocks(false).some(b => b.type === 'when_start' && b.isEnabled() && b.getNextBlock()); }
 function noStartHelp(){ log('Nothing to run yet. Put your blocks under a "when ▶ clicked" block (in Events), then click Run.', 'err'); }
@@ -2466,15 +2481,19 @@ def _add(i, v, k):
     _S[i] += v
     _C[i] += 1
 def _send():
+  # all values in one line with a check number, so a line with lost letters is noticed and skipped
+  out = []
   for i in range(${n}):
     if _C[i]:
       v = _S[i] if _K[i] == 1 else round(_S[i] / _C[i])
     else:
       v = '?' if _B[i] else 0
-    print('@W|r' + str(i) + '|' + str(v))
+    out.append(str(v))
     _S[i] = 0
     _C[i] = 0
     _B[i] = 0
+  s = ','.join(out)
+  print('@M|' + s + '|' + str(sum(map(ord, s)) % 89 + 10))
 _t = running_time()
 while True:
 ${reads || '  pass'}
@@ -2497,6 +2516,23 @@ ${reads || '  pass'}
   win.querySelector('.mx').onclick = async () => { win.hidden = true; if (running) { await stop(); setStopped(); } };
 
   /* readings from the reading program go to this window; everything else as before */
+  /* Output from the micro:bit, a line at a time. Value lines carry a check number: a line where letters got lost
+     on the way is skipped (the next one comes soon), and never shows up as text in the messages. */
+  const check = t => { let n = 0; for (const ch of t) n += ch.charCodeAt(0); return n % 89 + 10; };
+  let line = '';
+  function takeLine(l){
+    let m = /^@M\|(.*)\|(\d+)$/.exec(l);
+    if (m) { if (check(m[1]) === +m[2] && running) m[1].split(',').forEach((v, i) => { if (cells[i]) cells[i].textContent = v; }); return; }
+    m = /^@W\|([^|]*)\|(.*)\|(\d+)$/.exec(l);
+    if (m) { if (check(m[1] + '|' + m[2]) === +m[3]) window.watchShow(m[1], m[2]); return; }
+    if (/@|^W\||M\||W\|r/.test(l)) return;   /* a value line that lost letters */
+    outRaw(l + '\n');
+  }
+  window.outHook = text => {
+    for (const ch of text) { if (ch === '\n') { takeLine(line); line = ''; } else line += ch; }
+    if (line && !/^[@WM|]/.test(line)) { outRaw(line); line = ''; }
+  };
+  window.outFlushHook = () => { if (line) { takeLine(line); line = ''; } };
   const plain = window.watchShow;
   window.watchShow = (k, val) => {
     const m = /^r(\d+)$/.exec(k);
