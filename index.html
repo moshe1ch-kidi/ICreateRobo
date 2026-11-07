@@ -2173,6 +2173,33 @@ EXAMPLES['A starts, B stops'] = `<xml xmlns="https://developers.google.com/block
   <block type="ev_button" x="30" y="720"><field name="B">b</field><next><block type="ev_stop_robot"></block></next></block>
 </xml>`;
 
+/* ---------- Robot only: "Calibrate line sensors" also in the Sensors window (Robot tab) ----------
+   The button stops the window's reading and closes it (both windows read from the micro:bit, so only one
+   at a time), then opens the calibration window. */
+(function addCalToSensors(){
+  const win = document.getElementById('monWin');
+  if (!win || typeof window.openCal !== 'function') { setTimeout(addCalToSensors, 300); return; }
+  const tr = s => (typeof T === 'function' ? T(s) : s);
+  const st = document.createElement('style');
+  st.textContent = '#monWin .mf .cal{border:2px solid #9966FF;background:none;color:#9966FF;border-radius:8px;padding:4px 8px;cursor:pointer;font:700 12px var(--f-ui, system-ui)}' +
+    '#monWin .mf .cal:hover{background:#9966FF;color:#fff}#monWin .mf .cal[hidden]{display:none}';
+  document.head.appendChild(st);
+  const add = win.querySelector('.mf .add');
+  const cal = document.createElement('button');
+  cal.type = 'button'; cal.className = 'cal'; cal.textContent = tr('Calibrate line sensors');
+  add.after(cal);
+  /* shown with the Robot tab only, like "Add a sensor" */
+  const sync = () => { cal.hidden = add.hidden; };
+  sync();
+  new MutationObserver(sync).observe(add, {attributes:true, attributeFilter:['hidden']});
+  cal.onclick = async () => {
+    cal.disabled = true;
+    try { await win.querySelector('.mx').onclick(); } catch(e) {}
+    cal.disabled = false;
+    window.openCal();
+  };
+})();
+
 const ws = Blockly.inject('blocklyDiv', {
   toolbox: trToolbox(toolbox), rtl: RTL, renderer: 'zelos', theme, trashcan: false, sounds: false,
   zoom: {controls: false, wheel: true, startScale: 0.8, maxScale: 2, minScale: 0.4},
